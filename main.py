@@ -1,5 +1,6 @@
 import copy
 import random
+import matplotlib.pyplot as plt
 
 
 def make_string_1_byte(string):
@@ -38,7 +39,8 @@ def out_of_map_coordinates():
     return arr_of_bad_coordinates
 
 
-def virtual_machine(arr_of_genes):  # function returns fitness
+def virtual_machine(one_person):  # function returns fitness
+    arr_of_genes = copy.deepcopy(one_person)
     position = 74
     treasures = [25, 33, 47, 52, 65]
     counter = 0
@@ -82,86 +84,82 @@ def virtual_machine(arr_of_genes):  # function returns fitness
                 if len(treasures) == 0:
                     # print(steps_of_person)
                     # break
+                    graph()
                     exit(steps_of_person)
         index_of_address += 1
     return 5 - len(treasures), steps_of_person
 
 
-def choose_random_players(number_of_players, parents):
+def choose_random_players(number_of_players):  # function chooses half of old gen as players (all players are different)
     indexes_of_players = []
     for p in range(number_of_players):
-        index = random.randint(0, number_of_children_in_each_gen - 1 - len(parents))  # minus elitists
-        while index in indexes_of_players and index:
-            index = random.randint(0, number_of_children_in_each_gen - 1 - len(parents))
+        index = random.randint(0, number_of_children_in_each_gen - 1)
+        while index in indexes_of_players:
+            index = random.randint(0, number_of_children_in_each_gen - 1)
         indexes_of_players.append(index)
     return indexes_of_players
 
 
 def tournament_selection():
-    parents = elitism()
-    num_of_parents = number_of_children_in_each_gen - how_many_new_blood - how_many_elitists
-    number_of_players_in_tournament_selection = num_of_parents//5
-
-    for i in range(num_of_parents):
-        winners_indexes = []
-        players = choose_random_players(number_of_players_in_tournament_selection, parents)
-        while len(players) != 1:
-            player_a = random.randint(0, len(players) - 1)
+    number_of_players_in_tournament_selection = number_of_children_in_each_gen // 2
+    winners_indexes = []
+    players = choose_random_players(number_of_players_in_tournament_selection)
+    while len(players) != 2:
+        player_a = random.randint(0, len(players) - 1)
+        player_b = random.randint(0, len(players) - 1)
+        while player_b == player_a:
             player_b = random.randint(0, len(players) - 1)
-            while player_b == player_a:
-                player_b = random.randint(0, len(players) - 1)
-            if arr_of_fitness[players[player_a]] > arr_of_fitness[players[player_b]]:
-                winners_indexes.append(players[player_a])
-            else:
-                winners_indexes.append(players[player_b])
-            players[player_a] = -1
-            players[player_b] = -1
-            players.remove(-1)
-            players.remove(-1)
-            if len(players) < 2:
-                players = winners_indexes
-                winners_indexes = []
-        parents.append(players[0])
-    return parents
+        if arr_of_fitness[players[player_a]] > arr_of_fitness[players[player_b]]:
+            winners_indexes.append(players[player_a])
+        else:
+            winners_indexes.append(players[player_b])
+        players[player_a] = -1
+        players[player_b] = -1
+        players.remove(-1)
+        players.remove(-1)
+        if len(players) < 2:
+            players = winners_indexes
+            winners_indexes = []
+    return players
 
 
 def roulette_selection():
-    parents = elitism()
+    parents = []
     fitness_of_population = 0
-    num_of_parents = number_of_children_in_each_gen - how_many_new_blood - how_many_elitists
-    for i in range(num_of_parents):
-        fitness_of_population += arr_of_fitness[i]
-    for i in range(num_of_parents):
-        sum_of_fitness = 0
+    for i in arr_of_fitness:
+        fitness_of_population += i
+    for i in range(2):
+        sum_of_fitness_one_generation = 0
         index = 0
         roulette = random.uniform(0, fitness_of_population)
-        while roulette > sum_of_fitness:
-            sum_of_fitness += arr_of_fitness[index]
+        while roulette > sum_of_fitness_one_generation:
+            sum_of_fitness_one_generation += arr_of_fitness[index]
             index += 1
         parents.append(index - 1)
     return parents
 
 
-def mutation_chance(string):  # mutation chance is 20%, revert last bit
+def mutation_chance(string):  # mutation chance is 10%, revert last bit
     rand_number = random.randint(1, 100)
-    if rand_number < 21:
+    rand_bit = random.randint(0, 7)
+    if rand_number < 11:
         is_mutating = True
     else:
         is_mutating = False
     if is_mutating:
-        if string[7] == '1':
-            string = string[:7] + '0'
+        if string[rand_bit] == '1':
+            string = string[:rand_bit] + '0' + string[rand_bit + 1:]
         else:
-            string = string[:7] + '1'
+            string = string[:rand_bit] + '1' + string[rand_bit + 1:]
     return string
 
 
-def elitism():
+def elitism(old_gen):
     elitists = []
     for i in range(how_many_elitists):
         value_of_parent = max(arr_of_fitness)
         parent_index = arr_of_fitness.index(value_of_parent)
-        elitists.append(parent_index)
+        elitists.append(old_gen[parent_index])
         arr_of_fitness.remove(value_of_parent)
     return elitists
 
@@ -179,39 +177,44 @@ def new_blood():
     return new_people
 
 
-def create_next_gen(parents_indexes, old_gen):  # random parent + random other parent -> 2 kids
+def create_next_gen(parents_indexes, old_gen):  # elitists, new blood + 2 parents make the rest
     next_gen = new_blood()
+    next_gen.extend(elitism(old_gen))
     parents = copy.deepcopy(parents_indexes)
-    if len(parents) % 2 == 1:
-        parents.append(parents[0])
-    while len(parents) != 0:
-        random_a_index = random.randint(0, len(parents)-1)
-        random_b_index = random.randint(0, len(parents)-1)
-        while random_a_index == random_b_index:
-            random_a_index = random.randint(0, len(parents)-1)
-        parent_a = old_gen[parents[random_a_index]]
-        parent_b = old_gen[parents[random_b_index]]
+    parent_a = old_gen[parents[0]]
+    parent_b = old_gen[parents[1]]
+    for i in range(number_of_children_in_each_gen-len(next_gen)):
         index_of_changing_gene = random.randint(0, 63)
-        child_a = []
-        child_b = []
+        child = []
         for j in range(64):
             if j < index_of_changing_gene:
-                child_a.append(mutation_chance(parent_a[j]))
-                child_b.append(mutation_chance(parent_b[j]))
+                child.append(mutation_chance(parent_a[j]))
             else:
-                child_a.append(mutation_chance(parent_b[j]))
-                child_b.append(mutation_chance(parent_a[j]))
-        parents[random_a_index] = "X"
-        parents[random_b_index] = "X"
-        parents.remove("X")
-        parents.remove("X")
-        next_gen.append(child_a)
-        next_gen.append(child_b)
+                child.append(mutation_chance(parent_b[j]))
+        next_gen.append(child)
     return next_gen
 
 
-def print_best_guy_in_gen():
-    print(max(arr_of_fitness))
+def best_guy_in_gen():
+    return max(arr_of_fitness)
+
+
+def sum_of_fitness():
+    sum_of_f = 0
+    for i in arr_of_fitness:
+        sum_of_f += i
+    return sum_of_f
+
+
+def graph():
+    x = [i for i in range(len(fitness))]
+    plt.plot(x, fitness)
+
+    plt.xlabel('Generation number')
+    plt.ylabel('Best fitness in generation')
+    plt.title('Simple Line Plot')
+
+    plt.show()
 
 
 #########################################################################
@@ -226,6 +229,7 @@ wrong_coordinates = out_of_map_coordinates()
 generations = [create_first_generation()]
 continue_to_find_all_treasures = True
 index_of_gen = 0
+fitness = []
 
 while continue_to_find_all_treasures:
     arr_of_fitness = []
@@ -235,7 +239,7 @@ while continue_to_find_all_treasures:
             continue_to_find_all_treasures = False
             break
         arr_of_fitness.append(1 + treasures_find - len(steps) / 1000)
-    print_best_guy_in_gen()
+    fitness.append(best_guy_in_gen())
     if selection_type == "1":
         par_indexes = tournament_selection()
     else:
@@ -247,4 +251,5 @@ while continue_to_find_all_treasures:
         if con == "yes":
             how_many_gens += int(input("How many generations? "))
         else:
+            graph()
             exit("No solution")
